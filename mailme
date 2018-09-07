@@ -1,0 +1,145 @@
+#!/usr/bin/python
+### RYan Stouffer
+### A fun pogram that emails files to yourself
+### NOtes
+## I am separating config file from obt args with the idea that 
+## the config file will handle the connections but the 
+## args would be about the email itself
+
+
+import smtplib
+import os.path as ospath
+import os
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email.utils import COMMASPACE, formatdate
+from email import encoders
+from optparse import OptionParser
+import select
+import datetime
+import sys
+import configparser
+
+verbose=False
+subject=""
+
+usage = "usage: %prog [options] [file1] [file2] [...]"
+parser = OptionParser(usage=usage)
+
+#parser.add_option("-h", "--help", dest="to", help="Comma separated list of emails")
+parser.add_option("-t", "--to", dest="to", help="Comma separated list of emails")
+parser.add_option("-s", "--subject", dest="subject", help="Subject of the email")
+parser.add_option("-m", "--message", dest="message", help="Message of the email")
+parser.add_option("-f", "--filename", dest="filename", help="Filename stdin attachment")
+parser.add_option("-c", "--config", dest="config", help="Configuration file for mail data")
+parser.add_option("-v", "--verbose", action="store_true", dest="verbose", help="Verbose Flag",default=False)
+
+(options, args) = parser.parse_args()
+
+
+## send_mail sends the email
+## optargs
+###  send_from who the email is from
+###  send_to an array list of strings
+###  subject string
+###  message string
+###  files an array list of file paths
+## config file
+###  server email server
+###  port server port
+###  username username
+###  password unencrypted password
+###  use_tls boolean use tls or not
+def send_mail(send_from, send_to, subject, message, files, server, port, username, password, use_tls):
+	#some boinler plate for the email itself
+	msg = MIMEMultipart()
+	msg['From'] = send_from
+	msg['To'] = COMMASPACE.join(send_to)
+	msg['Date'] = formatdate(localtime=True)
+	msg['Subject'] = subject
+
+	#add the message
+	msg.attach(MIMEText(message))
+
+	
+	# check for stdin if so attach it to the file
+	if not sys.stdin.isatty():
+		part = MIMEBase('application', "octet-stream")
+		part.set_payload(sys.stdin.read())
+		encoders.encode_base64(part)
+		part.add_header('Content-Disposition', 'atachment; filename="{}"'.format(filename))
+		msg.attach(part)
+
+	# get args coming in assume are files
+	for path in files:
+		part = MIMEBase('application', "octet-stream")
+		with open(path, 'rb') as file:
+			part.set_payload(file.read())
+		encoders.encode_base64(part)
+		part.add_header('Content-Disposition', 'attachment; filename="{}"'.format(os.path.basename(path)))
+		msg.attach(part)
+		message = message + ' ' + path
+
+	if verbose: print 'connecting to server and port ' + server + ' ' + str(port)
+
+	# send the meail
+	smtp = smtplib.SMTP(server, port)
+	if use_tls:
+		smtp.starttls()
+		smtp.login(username, password)
+	smtp.sendmail(send_from, send_to, msg.as_string())
+	smtp.quit()
+
+if options.verbose:
+	verbose=True
+
+if options.message:
+	message = options.message
+
+if options.subject:
+	subject = options.subject
+else:
+	subject = datetime.datetime.now().strftime('Attached %Y-%m-%d')
+
+if options.filename:
+    filename=options.filename
+else:
+	filename='output.txt'
+
+if options.to:
+	toarr = options.to.split(',')
+else:
+	toarr = []
+
+if options.config:
+	configfilepath=options.config
+else:
+	configfilepath='.mailme/mailme.ini'
+
+if verbose: print 'Using config file ' + configfilepath
+
+
+config = configparser.ConfigParser()
+
+if ospath.isfile(configfilepath):
+
+	config.read(configfilepath)
+else:
+	if not ospath.exists(ospath.dirname(configfilepath)):
+		os.makedirs(ospath.dirname(configfilepath))
+
+	config['DEFAULT'] = { 'send_from':'sender@example.com', 'send_to':['defaultrecipient@example.com'], 'subject_postfix':"", 'message_prefix':"", 
+              'server':"smtp.example.com", 'port':587, 'username':'username@example.com', 'password':'userpassword', 'use_tls':True}
+
+	with open(configfilepath, 'w') as configfile:
+		config.write(configfile)
+	print "please provide settings to " + configfilepath
+	exit
+
+settings=config['DEFAULT']
+
+toarr.append(settings['my_email'])
+
+send_mail(settings['send_from'], toarr, subject+' '+settings['subject_postfix'], settings['message_prefix'], args, settings['server'], int(settings['port']),  settings['username'],  settings['userpassword'], settings['use_tls'])
+
