@@ -1,7 +1,7 @@
 #!/usr/bin/python
-### RYan Stouffer
+### Ryan Stouffer
 ### A fun pogram that emails files to yourself
-### NOtes
+### Notes
 ## I am separating config file from obt args with the idea that 
 ## the config file will handle the connections but the 
 ## args would be about the email itself
@@ -25,13 +25,12 @@ verbose=False
 subject=""
 
 usage = "usage: %prog [options] [file1] [file2] [...]"
-parser = OptionParser(usage=usage)
+parser = OptionParser(usage=usage, version="%prog 0.1", description="A simple commandline tool to send emails to yourself, will take a list of files as args.  If stdin is detected that will be attached as a file.  On first run a config file is generated and if not found it tries to create it and quit.  You are expected to populate that config file.  ")
 
-#parser.add_option("-h", "--help", dest="to", help="Comma separated list of emails")
 parser.add_option("-t", "--to", dest="to", help="Comma separated list of emails")
 parser.add_option("-s", "--subject", dest="subject", help="Subject of the email")
 parser.add_option("-m", "--message", dest="message", help="Message of the email")
-parser.add_option("-f", "--filename", dest="filename", help="Filename stdin attachment")
+parser.add_option("-f", "--filename", dest="filename", help="Filename stdin attachment if no stdin then the option is ignored")
 parser.add_option("-c", "--config", dest="config", help="Configuration file for mail data")
 parser.add_option("-v", "--verbose", action="store_true", dest="verbose", help="Verbose Flag",default=False)
 
@@ -97,11 +96,14 @@ if options.verbose:
 if options.message:
 	message = options.message
 
+
+#always have a subject
 if options.subject:
 	subject = options.subject
 else:
 	subject = datetime.datetime.now().strftime('Attached %Y-%m-%d')
 
+#if no stdin then ignored
 if options.filename:
     filename=options.filename
 else:
@@ -112,6 +114,7 @@ if options.to:
 else:
 	toarr = []
 
+#the config path can change, I am not sure how this would work with windows, where would I put the config file?
 if options.config:
 	configfilepath=options.config
 else:
@@ -122,6 +125,8 @@ if verbose: print 'Using config file ' + configfilepath
 
 config = configparser.ConfigParser()
 
+
+#use the config parser if none is found create it and quit
 if ospath.isfile(configfilepath):
 
 	config.read(configfilepath)
