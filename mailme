@@ -59,7 +59,6 @@ def send_mail(send_from, send_to, subject, message, files, server, port, usernam
 	msg['Subject'] = subject
 
 	#add the message
-	msg.attach(MIMEText(message))
 
 	
 	# check for stdin if so attach it to the file
@@ -79,6 +78,8 @@ def send_mail(send_from, send_to, subject, message, files, server, port, usernam
 		part.add_header('Content-Disposition', 'attachment; filename="{}"'.format(os.path.basename(path)))
 		msg.attach(part)
 		message = message + ' ' + path
+
+	msg.attach(MIMEText(message))
 
 	if verbose: print 'connecting to server and port ' + server + ' ' + str(port)
 
