@@ -186,8 +186,6 @@ else:
 
 	sys.exit()	
 
-print password
-
 toarr.append(settings['send_from'])
 
 send_mail(settings['send_from'], toarr, subject+' '+settings['subject_postfix'], settings['message_prefix'], args, settings['server'], int(settings['port']),  settings['username'],  password, settings['use_tls'])
