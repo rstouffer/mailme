@@ -20,12 +20,39 @@ import select
 import datetime
 import sys
 import configparser
+from appdirs import AppDirs
+import base64
+from Crypto.Cipher import AES
+from Crypto import Random
+import hashlib
+
+cq=str(bytearray([82, 101, 97, 108, 105, 116, 121, 32, 105, 115, 32, 116, 104, 97, 116, 32, 119, 104, 105, 99, 104, 44, 32, 119, 104, 101, 110, 32, 121, 111, 117, 32, 115, 116, 111, 112, 32, 98, 101, 108, 105, 101, 118, 105, 110, 103, 32, 105, 110, 32, 105, 116, 44, 32, 100, 111, 101, 115, 110, 39, 116, 32, 103, 111, 32, 97, 119, 97, 121, 46]))
+
+version='0.1'
+
+
+def encrypt(raw):
+	bs=32
+	key=hashlib.sha256(cq.encode()).digest()
+	raw = raw+(bs - len(raw) % bs) * chr(bs - len(raw) % bs)
+	iv = Random.new().read(AES.block_size)
+	cipher = AES.new(key, AES.MODE_CBC, iv)
+	return base64.b64encode(iv + cipher.encrypt(raw))
+
+def decrypt(enc):
+	bs=32
+	key=hashlib.sha256(cq.encode()).digest()
+	enc = base64.b64decode(enc)
+	iv = enc[:AES.block_size]
+	cipher = AES.new(key, AES.MODE_CBC, iv)
+	bytearr=cipher.decrypt(enc[AES.block_size:])
+	return bytearr[:-ord(bytearr[len(bytearr)-1:])].decode('utf-8')
 
 verbose=False
 subject=""
 
 usage = "usage: %prog [options] [file1] [file2] [...]"
-parser = OptionParser(usage=usage, version="%prog 0.1", description="A simple commandline tool to send emails to yourself, will take a list of files as args.  If stdin is detected that will be attached as a file.  On first run a config file is generated and if not found it tries to create it and quit.  You are expected to populate that config file.  ")
+parser = OptionParser(usage=usage, version="%prog " + version, description="A simple commandline tool to send emails to yourself, will take a list of files as args.  If stdin is detected that will be attached as a file.  On first run a config file is generated and if not found it tries to create it and quit.  You are expected to populate that config file.  ")
 
 parser.add_option("-t", "--to", dest="to", help="Comma separated list of emails")
 parser.add_option("-s", "--subject", dest="subject", help="Subject of the email")
@@ -84,6 +111,7 @@ def send_mail(send_from, send_to, subject, message, files, server, port, usernam
 	if verbose: print 'connecting to server and port ' + server + ' ' + str(port)
 
 	# send the meail
+
 	smtp = smtplib.SMTP(server, port)
 	if use_tls:
 		smtp.starttls()
@@ -119,7 +147,8 @@ else:
 if options.config:
 	configfilepath=options.config
 else:
-	configfilepath='.mailme/mailme.ini'
+	dirs = AppDirs("MailMe", "RyanStouffer.com", version=version)
+	configfilepath=dirs.user_config_dir+'/mailme.ini'
 
 if verbose: print 'Using config file ' + configfilepath
 
@@ -128,9 +157,21 @@ config = configparser.ConfigParser()
 
 
 #use the config parser if none is found create it and quit
+
 if ospath.isfile(configfilepath):
 
 	config.read(configfilepath)
+	settings=config['DEFAULT']
+
+	if settings['password'] or settings['password'] != '':
+
+		password = settings['password']
+		config.set('DEFAULT', 'encryptedpassword', encrypt(password))
+		config.set('DEFAULT', 'password', '')
+		with open(configfilepath, 'w') as configfile:
+			config.write(configfile)
+	else: 
+		password=decrypt(settings['encryptedpassword'])
 else:
 	if not ospath.exists(ospath.dirname(configfilepath)):
 		os.makedirs(ospath.dirname(configfilepath))
@@ -140,12 +181,14 @@ else:
 
 	with open(configfilepath, 'w') as configfile:
 		config.write(configfile)
+
 	print "please provide settings to " + configfilepath
-	exit
 
-settings=config['DEFAULT']
+	sys.exit()	
 
-toarr.append(settings['my_email'])
+print password
 
-send_mail(settings['send_from'], toarr, subject+' '+settings['subject_postfix'], settings['message_prefix'], args, settings['server'], int(settings['port']),  settings['username'],  settings['userpassword'], settings['use_tls'])
+toarr.append(settings['send_from'])
+
+send_mail(settings['send_from'], toarr, subject+' '+settings['subject_postfix'], settings['message_prefix'], args, settings['server'], int(settings['port']),  settings['username'],  password, settings['use_tls'])
 
